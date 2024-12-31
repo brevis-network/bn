@@ -13,8 +13,8 @@ pub use self::fq2::{Fq2, fq2_nonresidue};
 pub use self::fq6::Fq6;
 pub use self::fq12::Fq12;
 
-pub trait FieldElement
-    : Sized
+pub trait FieldElement: 
+    Sized
     + Copy
     + Clone
     + Add<Output = Self>
@@ -23,7 +23,8 @@ pub trait FieldElement
     + Neg<Output = Self>
     + PartialEq
     + Eq
-    + Debug {
+    + Debug 
+{
     fn zero() -> Self;
     fn one() -> Self;
     fn random<R: Rng>(_: &mut R) -> Self;
@@ -32,6 +33,7 @@ pub trait FieldElement
         (*self) * (*self)
     }
     fn inverse(self) -> Option<Self>;
+    fn inverse_unconstrained(self) -> Option<Self>;
     fn pow<I: Into<U256>>(&self, by: I) -> Self {
         let mut res = Self::one();
 

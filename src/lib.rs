@@ -34,7 +34,7 @@ impl Fr {
         fields::Fr::from_str(s).map(|e| Fr(e))
     }
     pub fn inverse(&self) -> Option<Self> {
-        self.0.inverse().map(|e| Fr(e))
+        self.0.inverse_unconstrained().map(|e| Fr(e))
     }
     pub fn is_zero(&self) -> bool {
         self.0.is_zero()
@@ -48,8 +48,9 @@ impl Fr {
             .map(|x| Fr::new_mul_factor(x))
     }
     pub fn to_big_endian(&self, slice: &mut [u8]) -> Result<(), FieldError> {
+        // NOTE: serialized in Montgomery form (as in the original bn crate)
         self.0
-            .raw()
+            .to_mont()
             .to_big_endian(slice)
             .map_err(|_| FieldError::InvalidSliceLength)
     }
@@ -124,7 +125,7 @@ pub use crate::groups::Error as GroupError;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(C)]
-pub struct Fq(fields::Fq);
+pub struct Fq(pub fields::Fq);
 
 impl Fq {
     pub fn zero() -> Self {
@@ -143,7 +144,7 @@ impl Fq {
         fields::Fq::from_str(s).map(|e| Fq(e))
     }
     pub fn inverse(&self) -> Option<Self> {
-        self.0.inverse().map(|e| Fq(e))
+        self.0.inverse_unconstrained().map(|e| Fq(e))
     }
     pub fn is_zero(&self) -> bool {
         self.0.is_zero()
@@ -158,13 +159,7 @@ impl Fq {
             .map(|x| Fq(x))
     }
     pub fn to_big_endian(&self, slice: &mut [u8]) -> Result<(), FieldError> {
-        let mut a: arith::U256 = self.0.into();
-        // convert from Montgomery representation
-        a.mul(
-            &fields::Fq::one().raw(),
-            &fields::Fq::modulus(),
-            self.0.inv(),
-        );
+        let a: arith::U256 = self.0.into();
         a.to_big_endian(slice)
             .map_err(|_| FieldError::InvalidSliceLength)
     }
@@ -217,7 +212,7 @@ impl Mul for Fq {
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(C)]
-pub struct Fq2(fields::Fq2);
+pub struct Fq2(pub fields::Fq2);
 
 impl Fq2 {
     pub fn one() -> Fq2 {
@@ -300,8 +295,8 @@ impl Mul for Fq2 {
     }
 }
 
-pub trait Group
-    : Send
+pub trait Group:
+    Send
     + Sync
     + Copy
     + Clone
@@ -456,7 +451,7 @@ impl AffineG1 {
     }
 
     pub fn from_jacobian(g1: G1) -> Option<Self> {
-        g1.0.to_affine().map(|x| AffineG1(x))
+        g1.0.to_affine().map(AffineG1)
     }
 }
 
@@ -476,7 +471,7 @@ impl G2 {
     }
 
     pub fn x(&self) -> Fq2 {
-        Fq2(self.0.x().clone())
+        Fq2(*self.0.x())
     }
 
     pub fn set_x(&mut self, x: Fq2) {
@@ -484,7 +479,7 @@ impl G2 {
     }
 
     pub fn y(&self) -> Fq2 {
-        Fq2(self.0.y().clone())
+        Fq2(*self.0.y())
     }
 
     pub fn set_y(&mut self, y: Fq2) {
@@ -492,7 +487,7 @@ impl G2 {
     }
 
     pub fn z(&self) -> Fq2 {
-        Fq2(self.0.z().clone())
+        Fq2(*self.0.z())
     }
 
     pub fn set_z(&mut self, z: Fq2) {
@@ -593,7 +588,7 @@ impl Gt {
         Gt(self.0.pow(exp.0))
     }
     pub fn inverse(&self) -> Option<Self> {
-        self.0.inverse().map(Gt)
+        self.0.inverse_unconstrained().map(Gt)
     }
     pub fn final_exponentiation(&self) -> Option<Self> {
         self.0.final_exponentiation().map(Gt)
@@ -613,8 +608,8 @@ pub fn pairing(p: G1, q: G2) -> Gt {
 }
 
 pub fn pairing_batch(pairs: &[(G1, G2)]) -> Gt {
-    let mut ps : Vec<groups::G1> = Vec::new();
-    let mut qs : Vec<groups::G2> = Vec::new();
+    let mut ps: Vec<groups::G1> = Vec::new();
+    let mut qs: Vec<groups::G2> = Vec::new();
     for (p, q) in pairs {
         ps.push(p.0);
         qs.push(q.0);
@@ -623,8 +618,8 @@ pub fn pairing_batch(pairs: &[(G1, G2)]) -> Gt {
 }
 
 pub fn miller_loop_batch(pairs: &[(G2, G1)]) -> Result<Gt, CurveError> {
-    let mut ps : Vec<groups::G2Precomp> = Vec::new();
-    let mut qs : Vec<groups::AffineG<groups::G1Params>> = Vec::new();
+    let mut ps: Vec<groups::G2Precomp> = Vec::new();
+    let mut qs: Vec<groups::AffineG<groups::G1Params>> = Vec::new();
     for (p, q) in pairs {
         ps.push(p.0.to_affine().ok_or(CurveError::ToAffineConversion)?.precompute());
         qs.push(q.0.to_affine().ok_or(CurveError::ToAffineConversion)?);
@@ -642,7 +637,7 @@ impl AffineG2 {
     }
 
     pub fn x(&self) -> Fq2 {
-        Fq2(self.0.x().clone())
+        Fq2(*self.0.x())
     }
 
     pub fn set_x(&mut self, x: Fq2) {
@@ -650,7 +645,7 @@ impl AffineG2 {
     }
 
     pub fn y(&self) -> Fq2 {
-        Fq2(self.0.y().clone())
+        Fq2(*self.0.y())
     }
 
     pub fn set_y(&mut self, y: Fq2) {
@@ -670,8 +665,8 @@ impl From<AffineG2> for G2 {
 
 #[cfg(test)]
 mod tests {
+    use super::{Fq, Fq2, G1, G2};
     use alloc::vec::Vec;
-    use super::{G1, Fq, G2, Fq2};
 
     fn hex(s: &'static str) -> Vec<u8> {
         use rustc_hex::FromHex;
@@ -680,13 +675,26 @@ mod tests {
 
     #[test]
     fn g1_from_compressed() {
-        let g1 = G1::from_compressed(&hex("0230644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd46"))
-            .expect("Invalid g1 decompress result");
-        assert_eq!(g1.x(), Fq::from_str("21888242871839275222246405745257275088696311157297823662689037894645226208582").unwrap());
-        assert_eq!(g1.y(), Fq::from_str("3969792565221544645472939191694882283483352126195956956354061729942568608776").unwrap());
+        let g1 = G1::from_compressed(&hex(
+            "0230644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd46",
+        ))
+        .expect("Invalid g1 decompress result");
+        assert_eq!(
+            g1.x(),
+            Fq::from_str(
+                "21888242871839275222246405745257275088696311157297823662689037894645226208582"
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            g1.y(),
+            Fq::from_str(
+                "3969792565221544645472939191694882283483352126195956956354061729942568608776"
+            )
+            .unwrap()
+        );
         assert_eq!(g1.z(), Fq::one());
     }
-
 
     #[test]
     fn g2_from_compressed() {
@@ -694,18 +702,32 @@ mod tests {
             &hex("0a023aed31b5a9e486366ea9988b05dba469c6206e58361d9c065bbea7d928204a761efc6e4fa08ed227650134b52c7f7dd0463963e8a4bf21f4899fe5da7f984a")
         ).expect("Valid g2 point hex encoding");
 
-        assert_eq!(g2.x(),
-                   Fq2::new(
-                       Fq::from_str("5923585509243758863255447226263146374209884951848029582715967108651637186684").unwrap(),
-                       Fq::from_str("5336385337059958111259504403491065820971993066694750945459110579338490853570").unwrap(),
-                   )
+        assert_eq!(
+            g2.x(),
+            Fq2::new(
+                Fq::from_str(
+                    "5923585509243758863255447226263146374209884951848029582715967108651637186684"
+                )
+                .unwrap(),
+                Fq::from_str(
+                    "5336385337059958111259504403491065820971993066694750945459110579338490853570"
+                )
+                .unwrap(),
+            )
         );
 
-        assert_eq!(g2.y(),
-                   Fq2::new(
-                       Fq::from_str("10374495865873200088116930399159835104695426846400310764827677226300185211748").unwrap(),
-                       Fq::from_str("5256529835065685814318509161957442385362539991735248614869838648137856366932").unwrap(),
-                   )
+        assert_eq!(
+            g2.y(),
+            Fq2::new(
+                Fq::from_str(
+                    "10374495865873200088116930399159835104695426846400310764827677226300185211748"
+                )
+                .unwrap(),
+                Fq::from_str(
+                    "5256529835065685814318509161957442385362539991735248614869838648137856366932"
+                )
+                .unwrap(),
+            )
         );
 
         // 0b prefix is point reflection on the curve
@@ -713,18 +735,32 @@ mod tests {
             &hex("0b023aed31b5a9e486366ea9988b05dba469c6206e58361d9c065bbea7d928204a761efc6e4fa08ed227650134b52c7f7dd0463963e8a4bf21f4899fe5da7f984a")
         ).expect("Valid g2 point hex encoding");
 
-        assert_eq!(g2.x(),
-                   Fq2::new(
-                       Fq::from_str("5923585509243758863255447226263146374209884951848029582715967108651637186684").unwrap(),
-                       Fq::from_str("5336385337059958111259504403491065820971993066694750945459110579338490853570").unwrap(),
-                   )
+        assert_eq!(
+            g2.x(),
+            Fq2::new(
+                Fq::from_str(
+                    "5923585509243758863255447226263146374209884951848029582715967108651637186684"
+                )
+                .unwrap(),
+                Fq::from_str(
+                    "5336385337059958111259504403491065820971993066694750945459110579338490853570"
+                )
+                .unwrap(),
+            )
         );
 
-        assert_eq!(g2.y(),
-                   Fq2::new(
-                       Fq::from_str("10374495865873200088116930399159835104695426846400310764827677226300185211748").unwrap(),
-                       Fq::from_str("5256529835065685814318509161957442385362539991735248614869838648137856366932").unwrap(),
-                   )
+        assert_eq!(
+            g2.y(),
+            Fq2::new(
+                Fq::from_str(
+                    "10374495865873200088116930399159835104695426846400310764827677226300185211748"
+                )
+                .unwrap(),
+                Fq::from_str(
+                    "5256529835065685814318509161957442385362539991735248614869838648137856366932"
+                )
+                .unwrap(),
+            )
         );
 
         // valid point but invalid sign prefix

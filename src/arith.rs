@@ -295,13 +295,33 @@ impl U256 {
         sub_noborrow(&mut self.0, &other.0);
     }
 
-    /// Multiply `self` by `other` (mod `modulo`) via the Montgomery
+    /// Multiply `self` by `other` (mod `modulo`)
     /// multiplication method.
-    pub fn mul(&mut self, other: &U256, modulo: &U256, inv: u128) {
-        mul_reduce(&mut self.0, &other.0, &modulo.0, inv);
+    pub fn mul(&mut self, other: &U256, modulo: &U256) {
+        #[cfg(target_os = "zkvm")]
+        {
+            unsafe {
+                pico_sdk::sys_bigint(
+                    (&mut self.0) as *mut [u128; 2] as *mut [u32; 8],
+                    0,
+                    (&self.0) as *const [u128; 2] as *const [u32; 8],
+                    (&other.0) as *const [u128; 2] as *const [u32; 8],
+                    (&modulo.0) as *const [u128; 2] as *const [u32; 8],
+                );
+            }
+        }
+        #[cfg(not(target_os = "zkvm"))]
+        {
+            let mut res = [0u128; 4];
 
-        if *self >= *modulo {
-            sub_noborrow(&mut self.0, &modulo.0);
+            unroll! {
+                for i in 0..2 {
+                    mac_digit(i, &mut res, &other.0, self.0[i]);
+                }
+            }
+
+            let (_, r) = U512(res).divrem(modulo);
+            *self = r;
         }
     }
 
@@ -519,29 +539,6 @@ fn mac_digit(from_index: usize, acc: &mut [u128; 4], b: &[u128; 2], c: u128) {
     }
 
     debug_assert!(carry == 0);
-}
-
-#[inline]
-fn mul_reduce(this: &mut [u128; 2], by: &[u128; 2], modulus: &[u128; 2], inv: u128) {
-    // The Montgomery reduction here is based on Algorithm 14.32 in
-    // Handbook of Applied Cryptography
-    // <http://cacr.uwaterloo.ca/hac/about/chap14.pdf>.
-
-    let mut res = [0; 2 * 2];
-    unroll! {
-        for i in 0..2 {
-            mac_digit(i, &mut res, by, this[i]);
-        }
-    }
-
-    unroll! {
-        for i in 0..2 {
-            let k = inv.wrapping_mul(res[i]);
-            mac_digit(i, &mut res, modulus, k);
-        }
-    }
-
-    this.copy_from_slice(&res[2..]);
 }
 
 #[test]
@@ -782,4 +779,52 @@ fn testing_divrem() {
         assert!(c1.unwrap() < modulo);
         assert!(c0 < modulo);
     }
+}
+
+#[test]
+fn testing_mul() {
+    let mut b = U256::from([
+        0x7a17caa950ad28d7,
+        0x1f6ac17ae15521b9,
+        0x334bea4e696bd284,
+        0x2a1f6744ce179d8e,
+    ]);
+    let r_inv = U256::from([
+        0xed84884a014afa37,
+        0xeb2022850278edf8,
+        0xcf63e9cfb74492d9,
+        0x2e67157159e5c639,
+    ]);
+    let modulo = U256::from([
+        0x3c208c16d87cfd47,
+        0x97816a916871ca8d,
+        0xb85045b68181585d,
+        0x30644e72e131a029,
+    ]);
+    b.mul(&r_inv, &modulo);
+    assert_eq!(b, U256::from([3, 0, 0, 0]));
+}
+
+#[test]
+fn testing_mul2() {
+    let one = U256::from([
+        0xac96341c4ffffffb,
+        0x36fc76959f60cd29,
+        0x666ea36f7879462e,
+        0xe0a77c19a07df2f,
+    ]);
+    let mut r_inv = U256::from([
+        0xdc5ba0056db1194e,
+        0x90ef5a9e111ec87,
+        0xc8260de4aeb85d5d,
+        0x15ebf95182c5551c,
+    ]);
+    let modulo = U256::from([
+        0x43e1f593f0000001,
+        0x2833e84879b97091,
+        0xb85045b68181585d,
+        0x30644e72e131a029,
+    ]);
+    r_inv.mul(&one, &modulo);
+    assert_eq!(r_inv, U256::from([1, 0, 0, 0]));
 }

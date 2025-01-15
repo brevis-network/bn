@@ -273,8 +273,14 @@ impl FieldElement for Fq2 {
             }
             let byte_vec = read_vec();
             let bytes: [u8; 64] = byte_vec.try_into().unwrap();
-            let inv0 = Fq::new(U256(cast::<[u8; 32], [u128; 2]>(bytes[0..32].try_into().unwrap()))).unwrap();
-            let inv1 = Fq::new(U256(cast::<[u8; 32], [u128; 2]>(bytes[32..].try_into().unwrap()))).unwrap();
+            let inv0 = Fq::new(U256(cast::<[u8; 32], [u128; 2]>(
+                bytes[0..32].try_into().unwrap(),
+            )))
+            .unwrap();
+            let inv1 = Fq::new(U256(cast::<[u8; 32], [u128; 2]>(
+                bytes[32..].try_into().unwrap(),
+            )))
+            .unwrap();
             let inv = Fq2::new(inv0, inv1);
 
             assert!(inv * self == Fq2::one(), "Invalid hint for inverse");
@@ -455,7 +461,7 @@ impl Fq2 {
 
             pico_patch_libs::unconstrained! {
                 let mut buf = [0u8; 65];
-                
+
                 if let Some(root) = self.cpu_sqrt() {
                     let bytes = cast::<Fq2, [u8; 64]>(root);
                     buf[0..64].copy_from_slice(&bytes);
@@ -474,15 +480,21 @@ impl Fq2 {
             }
             let byte_vec = read_vec();
             let bytes: [u8; 65] = byte_vec.try_into().unwrap();
-            let root0 = Fq::new(U256(cast::<[u8; 32], [u128; 2]>(bytes[0..32].try_into().unwrap()))).unwrap();
-            let root1 = Fq::new(U256(cast::<[u8; 32], [u128; 2]>(bytes[32..64].try_into().unwrap()))).unwrap();
+            let root0 = Fq::new(U256(cast::<[u8; 32], [u128; 2]>(
+                bytes[0..32].try_into().unwrap(),
+            )))
+            .unwrap();
+            let root1 = Fq::new(U256(cast::<[u8; 32], [u128; 2]>(
+                bytes[32..64].try_into().unwrap(),
+            )))
+            .unwrap();
             let root = Fq2::new(root0, root1);
 
             match bytes[64] {
                 0 => {
                     assert!(root * root == *self * nqr, "Invalid hint for sqrt");
                     None
-                },
+                }
                 _ => {
                     assert!(root * root == *self, "Invalid hint for sqrt");
                     Some(root)
@@ -515,22 +527,22 @@ fn sqrt_fq2() {
         Fq::from_str(
             "12844195307879678418043983815760255909500142247603239203345049921980497041944",
         )
-            .unwrap(),
+        .unwrap(),
         Fq::from_str(
             "7476417578426924565731404322659619974551724117137577781074613937423560117731",
         )
-            .unwrap(),
+        .unwrap(),
     );
 
     let x2 = Fq2::new(
         Fq::from_str(
             "3345897230485723946872934576923485762803457692345760237495682347502347589474",
         )
-            .unwrap(),
+        .unwrap(),
         Fq::from_str(
             "1234912378405347958234756902345768290345762348957605678245967234857634857676",
         )
-            .unwrap(),
+        .unwrap(),
     );
 
     assert_eq!(x2.sqrt().unwrap(), x1);

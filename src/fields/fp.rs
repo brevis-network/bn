@@ -9,11 +9,10 @@ use super::Sqrt;
 
 #[cfg(target_os = "zkvm")]
 use {
-    bytemuck::{cast_ref, cast_mut, cast},
-    pico_patch_libs::io::{hint_slice, read_vec},
+    bytemuck::{cast, cast_mut, cast_ref},
     core::convert::TryInto,
+    pico_patch_libs::io::{hint_slice, read_vec},
 };
-
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, NoUninit, AnyBitPattern)]
 #[repr(C)]
@@ -102,10 +101,7 @@ impl Fr {
     /// Converts a U256 to an Fr regardless of modulus.
     pub fn new_mul_factor(a: U256) -> Self {
         let mut res = a;
-        res.mul(
-            &U256::one(),
-            &Self::modulus(),
-        );
+        res.mul(&U256::one(), &Self::modulus());
         Fr(res)
     }
 
@@ -120,7 +116,7 @@ impl Fr {
                 ]))
                 .1,
         )
-            .unwrap()
+        .unwrap()
     }
 
     /// Returns the modulus
@@ -191,7 +187,7 @@ impl FieldElement for Fr {
 
         #[cfg(target_os = "zkvm")]
         {
-            // Compute the inverse in an unconstrained block 
+            // Compute the inverse in an unconstrained block
             pico_patch_libs::unconstrained! {
                 // the element was previously checked to be nonzero
                 if let Some(inv) = self.cpu_inverse() {
@@ -208,7 +204,10 @@ impl FieldElement for Fr {
             let inv = Fr::new(U256(cast::<[u8; 32], [u128; 2]>(bytes))).unwrap();
 
             // Check that the inverse is correct
-            assert!(inv * self == Fr::one(), "Invalid hint supplied for Fq inverse");
+            assert!(
+                inv * self == Fr::one(),
+                "Invalid hint supplied for Fq inverse"
+            );
 
             return Some(inv);
         }
@@ -431,10 +430,7 @@ impl Fq {
     /// Converts a U256 to an Fr regardless of modulus.
     pub fn new_mul_factor(a: U256) -> Self {
         let mut res = a;
-        res.mul(
-            &U256::one(),
-            &Self::modulus(),
-        );
+        res.mul(&U256::one(), &Self::modulus());
         Fq(res)
     }
 
@@ -449,7 +445,7 @@ impl Fq {
                 ]))
                 .1,
         )
-            .unwrap()
+        .unwrap()
     }
 
     /// Returns the modulus
@@ -607,7 +603,10 @@ impl FieldElement for Fq {
 
             let inv = Fq::new(U256(cast::<[u8; 32], [u128; 2]>(bytes))).unwrap();
 
-            assert!(inv * self == Fq::one(), "Invalid hint supplied for Fq inverse");
+            assert!(
+                inv * self == Fq::one(),
+                "Invalid hint supplied for Fq inverse"
+            );
 
             return Some(inv);
         }
@@ -762,7 +761,7 @@ impl Fq {
             // We can hint back to the VM and contrain for correctness.
             pico_patch_libs::unconstrained! {
                 let mut buf = [0u8; 33];
-                
+
                 if let Some(root) = cpu_sqrt(self) {
                     // We have a valid square root, lets constrain it.
                     let bytes = cast::<[u128; 2], [u8; 32]>(root.0.0);
@@ -777,10 +776,10 @@ impl Fq {
                     let root = cpu_sqrt(&has_root).expect("nqr_f_q * self is a quadratic residue if self if not.");
 
                     let bytes = cast::<[u128; 2], [u8; 32]>(root.0.0);
-                    
+
                     buf[32] = 0;
                     buf[..32].copy_from_slice(&bytes);
-                    
+
                     hint_slice(&buf);
                 }
             }
@@ -800,7 +799,7 @@ impl Fq {
                     assert!(root * root == has_root, "Invalid hint supplied for Fq sqrt");
 
                     return None;
-                },
+                }
                 _ => {
                     let sqrt = Fq::new(U256(cast::<[u8; 32], [u128; 2]>(bytes))).unwrap();
 
@@ -854,7 +853,7 @@ fn sqrt_fq() {
     let fq1 = Fq::from_str(
         "5204065062716160319596273903996315000119019512886596366359652578430118331601",
     )
-        .unwrap();
+    .unwrap();
     let fq2 = Fq::from_str("348579348568").unwrap();
 
     assert_eq!(fq1, fq2.sqrt().expect("348579348568 is quadratic residue"));

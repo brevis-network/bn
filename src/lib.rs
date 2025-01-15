@@ -7,7 +7,7 @@ mod fields;
 mod groups;
 
 use crate::fields::FieldElement;
-use crate::groups::{GroupElement, G1Params, G2Params, GroupParams};
+use crate::groups::{G1Params, G2Params, GroupElement, GroupParams};
 
 use alloc::vec::Vec;
 use core::fmt::Display;
@@ -164,7 +164,6 @@ impl Display for FieldError {
     }
 }
 
-
 #[derive(Debug)]
 pub enum CurveError {
     InvalidEncoding,
@@ -183,7 +182,6 @@ impl Display for CurveError {
         }
     }
 }
-
 
 impl From<FieldError> for CurveError {
     fn from(fe: FieldError) -> Self {
@@ -356,7 +354,6 @@ impl Fq2 {
     }
 }
 
-
 impl Add<Fq2> for Fq2 {
     type Output = Self;
 
@@ -389,7 +386,6 @@ impl Mul for Fq2 {
     }
 }
 
-
 impl Div for Fq2 {
     type Output = Self;
 
@@ -397,7 +393,6 @@ impl Div for Fq2 {
         Fq2(self.0 / other.0)
     }
 }
-
 
 pub trait Group:
     Send
@@ -410,7 +405,8 @@ pub trait Group:
     + Add<Self, Output = Self>
     + Sub<Self, Output = Self>
     + Neg<Output = Self>
-    + Mul<Fr, Output = Self> {
+    + Mul<Fr, Output = Self>
+{
     fn zero() -> Self;
     fn one() -> Self;
     fn random<R: Rng>(rng: &mut R) -> Self;
@@ -554,7 +550,6 @@ impl Mul<Fr> for G1 {
 #[repr(C)]
 pub struct AffineG1(groups::AffineG1);
 
-
 impl Default for AffineG1 {
     fn default() -> Self {
         AffineG1(groups::AffineG::one())
@@ -621,7 +616,6 @@ impl Into<G1> for AffineG1 {
         G1(self.0.to_jacobian())
     }
 }
-
 
 impl Into<AffineG1> for G1 {
     fn into(self) -> AffineG1 {
@@ -783,7 +777,6 @@ impl Mul<Fr> for G2 {
     }
 }
 
-
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[repr(C)]
 pub struct Gt(fields::Fq12);
@@ -894,7 +887,6 @@ impl AffineG2 {
     }
 }
 
-
 impl Neg for AffineG2 {
     type Output = AffineG2;
 
@@ -908,7 +900,6 @@ impl From<AffineG2> for G2 {
         G2(affine.0.to_jacobian())
     }
 }
-
 
 impl From<G2> for AffineG2 {
     fn from(g2: G2) -> Self {
@@ -931,20 +922,20 @@ mod tests {
         let g1 = G1::from_compressed(&hex(
             "0230644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd46",
         ))
-            .expect("Invalid g1 decompress result");
+        .expect("Invalid g1 decompress result");
         assert_eq!(
             g1.x(),
             Fq::from_str(
                 "21888242871839275222246405745257275088696311157297823662689037894645226208582"
             )
-                .unwrap()
+            .unwrap()
         );
         assert_eq!(
             g1.y(),
             Fq::from_str(
                 "3969792565221544645472939191694882283483352126195956956354061729942568608776"
             )
-                .unwrap()
+            .unwrap()
         );
         assert_eq!(g1.z(), Fq::one());
     }
@@ -961,11 +952,11 @@ mod tests {
                 Fq::from_str(
                     "5923585509243758863255447226263146374209884951848029582715967108651637186684"
                 )
-                    .unwrap(),
+                .unwrap(),
                 Fq::from_str(
                     "5336385337059958111259504403491065820971993066694750945459110579338490853570"
                 )
-                    .unwrap(),
+                .unwrap(),
             )
         );
 
@@ -975,11 +966,11 @@ mod tests {
                 Fq::from_str(
                     "10374495865873200088116930399159835104695426846400310764827677226300185211748"
                 )
-                    .unwrap(),
+                .unwrap(),
                 Fq::from_str(
                     "5256529835065685814318509161957442385362539991735248614869838648137856366932"
                 )
-                    .unwrap(),
+                .unwrap(),
             )
         );
 
@@ -994,11 +985,11 @@ mod tests {
                 Fq::from_str(
                     "5923585509243758863255447226263146374209884951848029582715967108651637186684"
                 )
-                    .unwrap(),
+                .unwrap(),
                 Fq::from_str(
                     "5336385337059958111259504403491065820971993066694750945459110579338490853570"
                 )
-                    .unwrap(),
+                .unwrap(),
             )
         );
 
@@ -1008,11 +999,11 @@ mod tests {
                 Fq::from_str(
                     "10374495865873200088116930399159835104695426846400310764827677226300185211748"
                 )
-                    .unwrap(),
+                .unwrap(),
                 Fq::from_str(
                     "5256529835065685814318509161957442385362539991735248614869838648137856366932"
                 )
-                    .unwrap(),
+                .unwrap(),
             )
         );
 

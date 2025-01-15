@@ -1,15 +1,18 @@
-use core::ops::{Add, Mul, Neg, Sub};
-use rand::Rng;
-use crate::fields::{const_fq, FieldElement, Fq};
 use crate::arith::{U256, U512};
+use crate::fields::{const_fq, FieldElement, Fq};
+use bytemuck::{AnyBitPattern, NoUninit};
+use core::cmp::Ordering;
+use core::ops::{Add, Div, Mul, Neg, Sub};
+use rand::Rng;
 
-cfg_if::cfg_if! {
-    if #[cfg(target_os = "zkvm")] {
-        use pico_sdk::io::{hint_slice, read_vec};
-        use core::convert::TryInto;
-        use bytemuck::{cast, cast_ref, cast_mut};
-    }
-}
+use super::Sqrt;
+
+#[cfg(target_os = "zkvm")]
+use {
+    bytemuck::{cast, cast_mut, cast_ref},
+    core::convert::TryInto,
+    pico_patch_libs::io::{hint_slice, read_vec},
+};
 
 #[inline]
 fn fq_non_residue() -> Fq {
@@ -24,14 +27,14 @@ fn fq_non_residue() -> Fq {
 }
 
 #[inline]
-pub fn fq2_nonresidue() -> Fq2 {
+pub const fn fq2_nonresidue() -> Fq2 {
     Fq2::new(
         Fq::from_raw_unchecked(U256::from_raw_unchecked([9, 0])),
         Fq::from_raw_unchecked(U256::from_raw_unchecked([1, 0])),
     )
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, NoUninit, AnyBitPattern)]
 #[repr(C)]
 pub struct Fq2 {
     c0: Fq,
@@ -39,8 +42,8 @@ pub struct Fq2 {
 }
 
 impl Fq2 {
-    pub fn new(c0: Fq, c1: Fq) -> Self {
-        Fq2 { c0: c0, c1: c1 }
+    pub const fn new(c0: Fq, c1: Fq) -> Self {
+        Fq2 { c0, c1 }
     }
 
     pub fn scale(&self, by: Fq) -> Self {
@@ -62,6 +65,7 @@ impl Fq2 {
         }
     }
 
+    #[inline]
     pub fn mul_by_nonresidue(&self) -> Self {
         #[cfg(target_os = "zkvm")]
         {
@@ -139,7 +143,7 @@ impl Fq2 {
             let lhs = cast_mut::<Fq2, [u32; 16]>(self);
             let rhs = cast_ref::<Fq2, [u32; 16]>(&other);
             unsafe {
-                pico_sdk::syscall_bn254_fp2_addmod(lhs.as_mut_ptr(), rhs.as_ptr());
+                pico_patch_libs::syscall_bn254_fp2_addmod(lhs.as_mut_ptr(), rhs.as_ptr());
             }
         }
         #[cfg(not(target_os = "zkvm"))]
@@ -155,7 +159,7 @@ impl Fq2 {
             let lhs = cast_mut::<Fq2, [u32; 16]>(self);
             let rhs = cast_ref::<Fq2, [u32; 16]>(&other);
             unsafe {
-                pico_sdk::syscall_bn254_fp2_submod(lhs.as_mut_ptr(), rhs.as_ptr());
+                pico_patch_libs::syscall_bn254_fp2_submod(lhs.as_mut_ptr(), rhs.as_ptr());
             }
         }
         #[cfg(not(target_os = "zkvm"))]
@@ -171,7 +175,7 @@ impl Fq2 {
             let lhs = cast_mut::<Fq2, [u32; 16]>(self);
             let rhs = cast_ref::<Fq2, [u32; 16]>(&other);
             unsafe {
-                pico_sdk::syscall_bn254_fp2_mulmod(lhs.as_mut_ptr(), rhs.as_ptr());
+                pico_patch_libs::syscall_bn254_fp2_mulmod(lhs.as_mut_ptr(), rhs.as_ptr());
             }
         }
         #[cfg(not(target_os = "zkvm"))]
@@ -186,7 +190,7 @@ impl Fq2 {
         {
             let lhs = cast_mut::<Fq2, [u32; 16]>(self);
             unsafe {
-                pico_sdk::syscall_bn254_fp2_mulmod(lhs.as_mut_ptr(), lhs.as_ptr());
+                pico_patch_libs::syscall_bn254_fp2_mulmod(lhs.as_mut_ptr(), lhs.as_ptr());
             }
         }
         #[cfg(not(target_os = "zkvm"))]
@@ -201,7 +205,7 @@ impl Fq2 {
         {
             let lhs = cast_mut::<Fq2, [u32; 16]>(self);
             unsafe {
-                pico_sdk::syscall_bn254_fp2_addmod(lhs.as_mut_ptr(), lhs.as_ptr());
+                pico_patch_libs::syscall_bn254_fp2_addmod(lhs.as_mut_ptr(), lhs.as_ptr());
             }
         }
         #[cfg(not(target_os = "zkvm"))]
@@ -242,73 +246,58 @@ impl FieldElement for Fq2 {
         //     Multiplication and Squaring on Pairing-Friendly Fields.pdf
         //     Section 3 (Complex squaring)
 
-        let ab = self.c0 * self.c1;
-
-        Fq2 {
-            c0: (self.c1 * fq_non_residue() + self.c0) * (self.c0 + self.c1) - ab
-                - ab * fq_non_residue(),
-            c1: ab + ab,
-        }
+        let mut out = *self;
+        out.square_inp();
+        out
     }
 
     fn inverse(self) -> Option<Self> {
         // "High-Speed Software Implementation of the Optimal Ate Pairing
         // over Barreto–Naehrig Curves"; Algorithm 8
 
-        match (self
-            .c0
-            .cpu_mul(self.c0)
-            .cpu_sub((self.c1.cpu_mul(self.c1)).cpu_mul(fq_non_residue())))
-        .inverse()
-        {
-            Some(t) => Some(Fq2 {
-                c0: self.c0.cpu_mul(t),
-                c1: (self.c1.cpu_mul(t)).cpu_neg(),
-            }),
-            None => None,
+        if self.is_zero() {
+            return None;
         }
-    }
 
-    fn inverse_unconstrained(self) -> Option<Self> {
         #[cfg(target_os = "zkvm")]
         {
-            // Compute the inverse using the zkvm syscall
-            pico_sdk::unconstrained! {
-                let mut buf = [0u8; 65];
-                self.inverse().map(|inv| {
-                    let bytes = cast::<[u128; 4], [u8; 64]>(inv.to_u512().0);
-                    buf[0..64].copy_from_slice(&bytes);
-                    buf[64] = 1;
-                });
-                hint_slice(&buf);
-            }
-            let byte_vec = read_vec();
-            let bytes: [u8; 65] = byte_vec.try_into().unwrap();
-            match bytes[64] {
-                0 => None,
-                _ => {
-                    let inv = cast::<[u8; 64], Fq2>(bytes[0..64].try_into().unwrap());
-                    Some(inv).filter(|inv| !self.is_zero() && self * *inv == Fq2::one())
+            pico_patch_libs::unconstrained! {
+                // The elements was previously checked to be non-zero
+                if let Some(inv) = self.cpu_inverse() {
+                    let bytes = cast::<Fq2, [u8; 64]>(inv);
+
+                    hint_slice(&bytes);
+                } else {
+                    unreachable!()
                 }
             }
+            let byte_vec = read_vec();
+            let bytes: [u8; 64] = byte_vec.try_into().unwrap();
+            let inv0 = Fq::new(U256(cast::<[u8; 32], [u128; 2]>(bytes[0..32].try_into().unwrap()))).unwrap();
+            let inv1 = Fq::new(U256(cast::<[u8; 32], [u128; 2]>(bytes[32..].try_into().unwrap()))).unwrap();
+            let inv = Fq2::new(inv0, inv1);
+
+            assert!(inv * self == Fq2::one(), "Invalid hint for inverse");
+
+            Some(inv)
         }
+
         #[cfg(not(target_os = "zkvm"))]
-        {
-            self.inverse()
-        }
+        self.cpu_inverse()
     }
 }
 
 impl Mul for Fq2 {
     type Output = Fq2;
 
-    fn mul(self, other: Fq2) -> Fq2 {
+    #[allow(unused_mut)]
+    fn mul(mut self, other: Fq2) -> Fq2 {
         #[cfg(target_os = "zkvm")]
         {
             self.mul_inp(&other);
             self
         }
-        #[cfg(not(target_os = "zkvm"))] 
+        #[cfg(not(target_os = "zkvm"))]
         {
             // Devegili OhEig Scott Dahab
             //     Multiplication and Squaring on Pairing-Friendly Fields.pdf
@@ -322,6 +311,16 @@ impl Mul for Fq2 {
                 c1: (self.c0 + self.c1) * (other.c0 + other.c1) - aa - bb,
             }
         }
+    }
+}
+
+impl Div for Fq2 {
+    type Output = Fq2;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        self * rhs
+            .inverse()
+            .expect("Failed to compute the inverse of the divisor")
     }
 }
 
@@ -358,6 +357,23 @@ impl Neg for Fq2 {
     }
 }
 
+/// `Fq2` elements are ordered lexicographically.
+impl Ord for Fq2 {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match self.c1.cmp(&other.c1) {
+            Ordering::Greater => Ordering::Greater,
+            Ordering::Less => Ordering::Less,
+            Ordering::Equal => self.c0.cmp(&other.c0),
+        }
+    }
+}
+
+impl PartialOrd for Fq2 {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 lazy_static::lazy_static! {
     static ref FQ: U256 = U256::from([
         0x3c208c16d87cfd47,
@@ -367,14 +383,14 @@ lazy_static::lazy_static! {
     ]);
 
     static ref FQ_MINUS3_DIV4: Fq =
-        Fq::new(3.into()).expect("3 is a valid field element and static; qed").neg() *
-        Fq::new(4.into()).expect("4 is a valid field element and static; qed").inverse()
-        .expect("4 has inverse in Fq and is static; qed");
+        Fq::new(3.into()).expect("3 is a valid field element and static; qed").cpu_neg().cpu_mul(
+        Fq::new(4.into()).expect("4 is a valid field element and static; qed").cpu_inverse()
+        .expect("4 has inverse in Fq and is static; qed"));
 
     static ref FQ_MINUS1_DIV2: Fq =
-        Fq::new(1.into()).expect("1 is a valid field element and static; qed").neg() *
-        Fq::new(2.into()).expect("2 is a valid field element and static; qed").inverse()
-            .expect("2 has inverse in Fq and is static; qed");
+        Fq::new(1.into()).expect("1 is a valid field element and static; qed").cpu_neg().cpu_mul(
+        Fq::new(2.into()).expect("2 is a valid field element and static; qed").cpu_inverse()
+            .expect("2 has inverse in Fq and is static; qed"));
 }
 
 impl Fq2 {
@@ -382,36 +398,103 @@ impl Fq2 {
         Fq2::new(Fq::zero(), Fq::one())
     }
 
+    fn cpu_pow(&self, by: U256) -> Self {
+        let mut res = Self::one();
+
+        for i in by.bits() {
+            res = res.cpu_mul(res);
+            if i {
+                res = res.cpu_mul(*self);
+            }
+        }
+        res
+    }
+
+    fn cpu_inverse(self) -> Option<Self> {
+        // "High-Speed Software Implementation of the Optimal Ate Pairing
+        // over Barreto–Naehrig Curves"; Algorithm 8
+
+        let x = self
+            .c0
+            .cpu_mul(self.c0)
+            .cpu_sub((self.c1.cpu_mul(self.c1)).cpu_mul(fq_non_residue()))
+            .cpu_inverse()
+            .map(|t| Fq2 {
+                c0: self.c0.cpu_mul(t),
+                c1: (self.c1.cpu_mul(t)).cpu_neg(),
+            });
+        x
+    }
+
+    fn cpu_sqrt(&self) -> Option<Self> {
+        let a1 = self.cpu_pow((*FQ_MINUS3_DIV4).into());
+        let a1a = a1.cpu_mul(*self);
+        let alpha = a1.cpu_mul(a1a);
+        let a0 = alpha.cpu_pow(*FQ).cpu_mul(alpha);
+
+        if a0 == Fq2::one().cpu_neg() {
+            return None;
+        }
+
+        if alpha == Fq2::one().cpu_neg() {
+            Some(Self::i().cpu_mul(a1a))
+        } else {
+            let b = (alpha.cpu_add(Fq2::one())).cpu_pow((*FQ_MINUS1_DIV2).into());
+            Some(b.cpu_mul(a1a))
+        }
+    }
+
     pub fn sqrt(&self) -> Option<Self> {
         #[cfg(target_os = "zkvm")]
         {
-            // Compute the square root using the zkvm syscall
-            pico_sdk::unconstrained! {
+            if self.is_zero() {
+                return Some(Self::zero());
+            }
+
+            let nqr = Fq2::new(Fq::new(2_u64.into()).unwrap(), Fq::one());
+
+            pico_patch_libs::unconstrained! {
                 let mut buf = [0u8; 65];
-                self.cpu_sqrt().map(|sqrt| {
-                    let bytes = cast::<[u128; 4], [u8; 64]>(sqrt.to_u512().0);
+                
+                if let Some(root) = self.cpu_sqrt() {
+                    let bytes = cast::<Fq2, [u8; 64]>(root);
                     buf[0..64].copy_from_slice(&bytes);
                     buf[64] = 1;
-                });
+                } else {
+                    // hint to the vm the root of the square of the product of self and the known nqr.
+                    let has_root = self.cpu_mul(nqr);
+                    let root = has_root.cpu_sqrt().unwrap();
+
+                    let bytes = cast::<Fq2, [u8; 64]>(root);
+                    buf[0..64].copy_from_slice(&bytes);
+                    buf[64] = 0;
+                }
+
                 hint_slice(&buf);
             }
             let byte_vec = read_vec();
             let bytes: [u8; 65] = byte_vec.try_into().unwrap();
+            let root0 = Fq::new(U256(cast::<[u8; 32], [u128; 2]>(bytes[0..32].try_into().unwrap()))).unwrap();
+            let root1 = Fq::new(U256(cast::<[u8; 32], [u128; 2]>(bytes[32..64].try_into().unwrap()))).unwrap();
+            let root = Fq2::new(root0, root1);
+
             match bytes[64] {
-                0 => None,
+                0 => {
+                    assert!(root * root == *self * nqr, "Invalid hint for sqrt");
+                    None
+                },
                 _ => {
-                    let sqrt = cast::<[u8; 64], Fq2>(bytes[0..64].try_into().unwrap());
-                    Some(sqrt).filter(|sqrt| *sqrt * *sqrt == *self)
+                    assert!(root * root == *self, "Invalid hint for sqrt");
+                    Some(root)
                 }
             }
         }
+
         #[cfg(not(target_os = "zkvm"))]
-        {
-            self.cpu_sqrt()
-        }
+        self.cpu_sqrt()
     }
 
-    pub fn to_u512(&self) -> U512 {
+    pub fn to_u512(self) -> U512 {
         let c0: U256 = (*self.real()).into();
         let c1: U256 = (*self.imaginary()).into();
 
@@ -419,6 +502,11 @@ impl Fq2 {
     }
 }
 
+impl Sqrt for Fq2 {
+    fn sqrt(&self) -> Option<Self> {
+        self.sqrt()
+    }
+}
 
 #[test]
 fn sqrt_fq2() {
@@ -427,22 +515,22 @@ fn sqrt_fq2() {
         Fq::from_str(
             "12844195307879678418043983815760255909500142247603239203345049921980497041944",
         )
-        .unwrap(),
+            .unwrap(),
         Fq::from_str(
             "7476417578426924565731404322659619974551724117137577781074613937423560117731",
         )
-        .unwrap(),
+            .unwrap(),
     );
 
     let x2 = Fq2::new(
         Fq::from_str(
             "3345897230485723946872934576923485762803457692345760237495682347502347589474",
         )
-        .unwrap(),
+            .unwrap(),
         Fq::from_str(
             "1234912378405347958234756902345768290345762348957605678245967234857634857676",
         )
-        .unwrap(),
+            .unwrap(),
     );
 
     assert_eq!(x2.sqrt().unwrap(), x1);
@@ -456,4 +544,22 @@ fn sqrt_fq2() {
             .sqrt()
             .is_none()
     );
+}
+
+#[test]
+fn test_fq2_nqr() {
+    let nqr = Fq2::new(Fq::new(2_u64.into()).unwrap(), Fq::one());
+    assert_eq!(nqr.sqrt(), None);
+
+    for _ in 0..100 {
+        // With probability 1/2, a random element is a non-quadratic residue
+        let random = Fq2::random(&mut rand::thread_rng());
+
+        if random.sqrt().is_none() {
+            let has_root = random * nqr;
+
+            // The product of two non-quadratic residues is a quadratic residue
+            assert!(has_root.sqrt().is_some());
+        }
+    }
 }

@@ -22,9 +22,8 @@ byteorder = { version = "1.0", features = ["i128"], default-features = false }
 crunchy = "0.2.1"
 lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
 rustc-hex = { version = "2", default-features = false }
-pico-patch-libs = { git = "https://github.com/brevis-network/brevis-vm.git", branch = "cli", package = "pico-patch-libs" }
 cfg-if = "1.0.0"
-bytemuck = { version = "1.16.1", features = ["derive"] }
+bytemuck = { version = "1.21.0", features = ["derive"] }
 num-bigint = { version = "0.4.6", default-features = false }
 
 [target.'cfg(all(target_os = "zkvm", target_vendor = "risc0"))'.dependencies]

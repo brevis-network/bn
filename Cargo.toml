@@ -27,7 +27,7 @@ bytemuck = { version = "1.21.0", features = ["derive"] }
 num-bigint = { version = "0.4.6", default-features = false }
 
 [target.'cfg(all(target_os = "zkvm", target_vendor = "risc0"))'.dependencies]
-pico-patch-libs = { git = "https://github.com/brevis-network/brevis-vm.git", branch = "cli", package = "pico-patch-libs" }
+pico-patch-libs = { git = "https://github.com/brevis-network/brevis-vm.git" }
 
 [dev-dependencies]
 rand = { version = "0.8.3", features = ["std_rng"] }

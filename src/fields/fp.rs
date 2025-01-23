@@ -26,6 +26,13 @@ impl From<Fr> for U256 {
 }
 
 impl Fr {
+    const MODULUS: [u64; 4] = [
+        0x43e1f593f0000001,
+        0x2833e84879b97091,
+        0xb85045b68181585d,
+        0x30644e72e131a029,
+    ];
+
     #[inline]
     #[allow(dead_code)]
     pub(crate) fn to_mont(self) -> U256 {
@@ -86,12 +93,7 @@ impl Fr {
 
     /// Converts a U256 to an Fp so long as it's below the modulus.
     pub fn new(a: U256) -> Option<Self> {
-        if a < U256::from([
-            0x43e1f593f0000001,
-            0x2833e84879b97091,
-            0xb85045b68181585d,
-            0x30644e72e131a029,
-        ]) {
+        if a < U256::from(Self::MODULUS) {
             Some(Fr(a))
         } else {
             None
@@ -108,13 +110,7 @@ impl Fr {
     pub fn interpret(buf: &[u8; 64]) -> Self {
         Fr::new(
             U512::interpret(buf)
-                .divrem(&U256::from([
-                    0x43e1f593f0000001,
-                    0x2833e84879b97091,
-                    0xb85045b68181585d,
-                    0x30644e72e131a029,
-                ]))
-                .1,
+                .divrem(&U256::from(Self::MODULUS)).1
         )
         .unwrap()
     }
@@ -123,12 +119,7 @@ impl Fr {
     #[inline]
     #[allow(dead_code)]
     pub fn modulus() -> U256 {
-        U256::from([
-            0x43e1f593f0000001,
-            0x2833e84879b97091,
-            0xb85045b68181585d,
-            0x30644e72e131a029,
-        ])
+        U256::from(Self::MODULUS)
     }
 
     #[inline]
@@ -798,15 +789,16 @@ impl Fq {
 
                     assert!(root * root == has_root, "Invalid hint supplied for Fq sqrt");
 
-                    return None;
+                    None
                 }
-                _ => {
+                1 => {
                     let sqrt = Fq::new(U256(cast::<[u8; 32], [u128; 2]>(bytes))).unwrap();
 
                     assert!(sqrt * sqrt == *self, "Invalid hint supplied for Fq sqrt");
 
-                    return Some(sqrt);
+                    Some(sqrt)
                 }
+                _ => panic!("invalid choice byte read from unconstrained hint")
             }
         }
 

@@ -140,10 +140,13 @@ impl Fq2 {
     pub(crate) fn add_inp(&mut self, other: &Fq2) {
         #[cfg(target_os = "zkvm")]
         {
-            let lhs = cast_mut::<Fq2, [u32; 16]>(self);
-            let rhs = cast_ref::<Fq2, [u32; 16]>(&other);
+            let lhs_0 = cast_mut::<Fq, [u64; 4]>(&mut self.c0);
+            let rhs_0 = cast_ref::<Fq, [u64; 4]>(&other.c0);
+            let lhs_1 = cast_mut::<Fq, [u64; 4]>(&mut self.c1);
+            let rhs_1 = cast_ref::<Fq, [u64; 4]>(&other.c1);
             unsafe {
-                pico_patch_libs::syscall_bn254_fp2_addmod(lhs.as_mut_ptr(), rhs.as_ptr());
+                pico_patch_libs::syscall_bn254_fp_addmod(lhs_0.as_mut_ptr(), rhs_0.as_ptr());
+                pico_patch_libs::syscall_bn254_fp_addmod(lhs_1.as_mut_ptr(), rhs_1.as_ptr());
             }
         }
         #[cfg(not(target_os = "zkvm"))]
@@ -156,10 +159,13 @@ impl Fq2 {
     pub(crate) fn sub_inp(&mut self, other: &Fq2) {
         #[cfg(target_os = "zkvm")]
         {
-            let lhs = cast_mut::<Fq2, [u32; 16]>(self);
-            let rhs = cast_ref::<Fq2, [u32; 16]>(&other);
+            let lhs_0 = cast_mut::<Fq, [u64; 4]>(&mut self.c0);
+            let rhs_0 = cast_ref::<Fq, [u64; 4]>(&other.c0);
+            let lhs_1 = cast_mut::<Fq, [u64; 4]>(&mut self.c1);
+            let rhs_1 = cast_ref::<Fq, [u64; 4]>(&other.c1);
             unsafe {
-                pico_patch_libs::syscall_bn254_fp2_submod(lhs.as_mut_ptr(), rhs.as_ptr());
+                pico_patch_libs::syscall_bn254_fp_submod(lhs_0.as_mut_ptr(), rhs_0.as_ptr());
+                pico_patch_libs::syscall_bn254_fp_submod(lhs_1.as_mut_ptr(), rhs_1.as_ptr());
             }
         }
         #[cfg(not(target_os = "zkvm"))]
@@ -172,8 +178,8 @@ impl Fq2 {
     pub(crate) fn mul_inp(&mut self, other: &Fq2) {
         #[cfg(target_os = "zkvm")]
         {
-            let lhs = cast_mut::<Fq2, [u32; 16]>(self);
-            let rhs = cast_ref::<Fq2, [u32; 16]>(&other);
+            let lhs = cast_mut::<Fq2, [u64; 8]>(self);
+            let rhs = cast_ref::<Fq2, [u64; 8]>(&other);
             unsafe {
                 pico_patch_libs::syscall_bn254_fp2_mulmod(lhs.as_mut_ptr(), rhs.as_ptr());
             }
@@ -188,7 +194,7 @@ impl Fq2 {
     pub fn square_inp(&mut self) {
         #[cfg(target_os = "zkvm")]
         {
-            let lhs = cast_mut::<Fq2, [u32; 16]>(self);
+            let lhs = cast_mut::<Fq2, [u64; 8]>(self);
             unsafe {
                 pico_patch_libs::syscall_bn254_fp2_mulmod(lhs.as_mut_ptr(), lhs.as_ptr());
             }
@@ -203,9 +209,11 @@ impl Fq2 {
     pub fn double_inp(&mut self) {
         #[cfg(target_os = "zkvm")]
         {
-            let lhs = cast_mut::<Fq2, [u32; 16]>(self);
+            let lhs_0 = cast_mut::<Fq, [u64; 4]>(&mut self.c0);
+            let lhs_1 = cast_mut::<Fq, [u64; 4]>(&mut self.c1);
             unsafe {
-                pico_patch_libs::syscall_bn254_fp2_addmod(lhs.as_mut_ptr(), lhs.as_ptr());
+                pico_patch_libs::syscall_bn254_fp_addmod(lhs_0.as_mut_ptr(), lhs_0.as_ptr());
+                pico_patch_libs::syscall_bn254_fp_addmod(lhs_1.as_mut_ptr(), lhs_1.as_ptr());
             }
         }
         #[cfg(not(target_os = "zkvm"))]

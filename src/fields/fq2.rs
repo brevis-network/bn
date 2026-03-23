@@ -143,7 +143,12 @@ impl Fq2 {
             let lhs = cast_mut::<Fq2, [u32; 16]>(self);
             let rhs = cast_ref::<Fq2, [u32; 16]>(&other);
             unsafe {
-                pico_patch_libs::syscall_bn254_fp2_addmod(lhs.as_mut_ptr(), rhs.as_ptr());
+                core::arch::asm!(
+                "ecall",
+                in("t0") 0x00_01_01_29u32,
+                in("a0") lhs.as_mut_ptr(),
+                in("a1") rhs.as_ptr(),
+                );
             }
         }
         #[cfg(not(target_os = "zkvm"))]
@@ -159,7 +164,12 @@ impl Fq2 {
             let lhs = cast_mut::<Fq2, [u32; 16]>(self);
             let rhs = cast_ref::<Fq2, [u32; 16]>(&other);
             unsafe {
-                pico_patch_libs::syscall_bn254_fp2_submod(lhs.as_mut_ptr(), rhs.as_ptr());
+                core::arch::asm!(
+                "ecall",
+                in("t0") 0x00_01_01_2Au32,
+                in("a0") lhs.as_mut_ptr(),
+                in("a1") rhs.as_ptr(),
+                );
             }
         }
         #[cfg(not(target_os = "zkvm"))]
@@ -175,7 +185,12 @@ impl Fq2 {
             let lhs = cast_mut::<Fq2, [u32; 16]>(self);
             let rhs = cast_ref::<Fq2, [u32; 16]>(&other);
             unsafe {
-                pico_patch_libs::syscall_bn254_fp2_mulmod(lhs.as_mut_ptr(), rhs.as_ptr());
+                core::arch::asm!(
+                "ecall",
+                in("t0") 0x00_01_01_2Bu32,
+                in("a0") lhs.as_mut_ptr(),
+                in("a1") rhs.as_ptr(),
+                );
             }
         }
         #[cfg(not(target_os = "zkvm"))]
@@ -190,7 +205,12 @@ impl Fq2 {
         {
             let lhs = cast_mut::<Fq2, [u32; 16]>(self);
             unsafe {
-                pico_patch_libs::syscall_bn254_fp2_mulmod(lhs.as_mut_ptr(), lhs.as_ptr());
+                core::arch::asm!(
+                "ecall",
+                in("t0") 0x00_01_01_2Bu32,
+                in("a0") lhs.as_mut_ptr(),
+                in("a1") lhs.as_ptr(),
+                );
             }
         }
         #[cfg(not(target_os = "zkvm"))]
@@ -205,7 +225,12 @@ impl Fq2 {
         {
             let lhs = cast_mut::<Fq2, [u32; 16]>(self);
             unsafe {
-                pico_patch_libs::syscall_bn254_fp2_addmod(lhs.as_mut_ptr(), lhs.as_ptr());
+                core::arch::asm!(
+                "ecall",
+                in("t0") 0x00_01_01_29u32,
+                in("a0") lhs.as_mut_ptr(),
+                in("a1") lhs.as_ptr(),
+                );
             }
         }
         #[cfg(not(target_os = "zkvm"))]

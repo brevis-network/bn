@@ -180,6 +180,7 @@ impl Ord for U256 {
                 _ => {}
             }
         }
+
         Ordering::Equal
     }
 }
@@ -216,6 +217,7 @@ impl U256 {
         for (l, i) in (0..2).rev().zip((0..2).map(|i| i * 16)) {
             n[l] = BigEndian::read_u128(&padded[i..]);
         }
+
         Ok(U256(n))
     }
 
@@ -234,7 +236,6 @@ impl U256 {
         for (l, i) in (0..2).rev().zip((0..2).map(|i| i * 16)) {
             BigEndian::write_u128(&mut padded[i..], self.0[l]);
         }
-
         s.copy_from_slice(&padded[..s.len()]);
 
         Ok(())
@@ -326,16 +327,17 @@ impl U256 {
     }
 
     /// Multiply `self` by `other` (mod `modulo`)
+    /// multiplication method.
     pub fn mul(&mut self, other: &U256, modulo: &U256) {
         #[cfg(target_os = "zkvm")]
         {
             unsafe {
                 pico_patch_libs::sys_bigint(
-                    (&mut self.0) as *mut [u128; 2] as *mut [u64; 4],
+                    (&mut self.0) as *mut [u128; 2] as *mut [u32; 8],
                     0,
-                    (&self.0) as *const [u128; 2] as *const [u64; 4],
-                    (&other.0) as *const [u128; 2] as *const [u64; 4],
-                    (&modulo.0) as *const [u128; 2] as *const [u64; 4],
+                    (&self.0) as *const [u128; 2] as *const [u32; 8],
+                    (&other.0) as *const [u128; 2] as *const [u32; 8],
+                    (&modulo.0) as *const [u128; 2] as *const [u32; 8],
                 );
             }
         }

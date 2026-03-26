@@ -140,10 +140,8 @@ impl Fq2 {
     pub(crate) fn add_inp(&mut self, other: &Fq2) {
         #[cfg(target_os = "zkvm")]
         {
-            let lhs_0 = cast_mut::<Fq, [u64; 4]>(&mut self.c0);
-            let rhs_0 = cast_ref::<Fq, [u64; 4]>(&other.c0);
-            let lhs_1 = cast_mut::<Fq, [u64; 4]>(&mut self.c1);
-            let rhs_1 = cast_ref::<Fq, [u64; 4]>(&other.c1);
+            let lhs = cast_mut::<Fq2, [u32; 16]>(self);
+            let rhs = cast_ref::<Fq2, [u32; 16]>(&other);
             unsafe {
                 core::arch::asm!(
                 "ecall",
@@ -163,10 +161,8 @@ impl Fq2 {
     pub(crate) fn sub_inp(&mut self, other: &Fq2) {
         #[cfg(target_os = "zkvm")]
         {
-            let lhs_0 = cast_mut::<Fq, [u64; 4]>(&mut self.c0);
-            let rhs_0 = cast_ref::<Fq, [u64; 4]>(&other.c0);
-            let lhs_1 = cast_mut::<Fq, [u64; 4]>(&mut self.c1);
-            let rhs_1 = cast_ref::<Fq, [u64; 4]>(&other.c1);
+            let lhs = cast_mut::<Fq2, [u32; 16]>(self);
+            let rhs = cast_ref::<Fq2, [u32; 16]>(&other);
             unsafe {
                 core::arch::asm!(
                 "ecall",
@@ -186,8 +182,8 @@ impl Fq2 {
     pub(crate) fn mul_inp(&mut self, other: &Fq2) {
         #[cfg(target_os = "zkvm")]
         {
-            let lhs = cast_mut::<Fq2, [u64; 8]>(self);
-            let rhs = cast_ref::<Fq2, [u64; 8]>(&other);
+            let lhs = cast_mut::<Fq2, [u32; 16]>(self);
+            let rhs = cast_ref::<Fq2, [u32; 16]>(&other);
             unsafe {
                 core::arch::asm!(
                 "ecall",
@@ -207,7 +203,7 @@ impl Fq2 {
     pub fn square_inp(&mut self) {
         #[cfg(target_os = "zkvm")]
         {
-            let lhs = cast_mut::<Fq2, [u64; 8]>(self);
+            let lhs = cast_mut::<Fq2, [u32; 16]>(self);
             unsafe {
                 core::arch::asm!(
                 "ecall",
@@ -227,8 +223,7 @@ impl Fq2 {
     pub fn double_inp(&mut self) {
         #[cfg(target_os = "zkvm")]
         {
-            let lhs_0 = cast_mut::<Fq, [u64; 4]>(&mut self.c0);
-            let lhs_1 = cast_mut::<Fq, [u64; 4]>(&mut self.c1);
+            let lhs = cast_mut::<Fq2, [u32; 16]>(self);
             unsafe {
                 core::arch::asm!(
                 "ecall",

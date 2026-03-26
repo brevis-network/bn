@@ -555,7 +555,6 @@ impl Default for AffineG1 {
         AffineG1(groups::AffineG::one())
     }
 }
-
 impl AffineG1 {
     pub fn new(x: Fq, y: Fq) -> Result<Self, GroupError> {
         Ok(AffineG1(groups::AffineG1::new(x.0, y.0)?))
@@ -572,7 +571,6 @@ impl AffineG1 {
     pub fn one() -> Self {
         AffineG1(groups::AffineG1::one())
     }
-
     pub fn x(&self) -> Fq {
         Fq(*self.0.x())
     }
@@ -681,7 +679,6 @@ impl G2 {
     pub fn z(&self) -> Fq2 {
         Fq2(*self.0.z())
     }
-
     pub fn set_z(&mut self, z: Fq2) {
         *self.0.z_mut() = z.0
     }

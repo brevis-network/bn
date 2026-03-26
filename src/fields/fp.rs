@@ -26,13 +26,6 @@ impl From<Fr> for U256 {
 }
 
 impl Fr {
-    const MODULUS: [u64; 4] = [
-        0x43e1f593f0000001,
-        0x2833e84879b97091,
-        0xb85045b68181585d,
-        0x30644e72e131a029,
-    ];
-
     #[inline]
     #[allow(dead_code)]
     pub(crate) fn to_mont(self) -> U256 {
@@ -93,7 +86,12 @@ impl Fr {
 
     /// Converts a U256 to an Fp so long as it's below the modulus.
     pub fn new(a: U256) -> Option<Self> {
-        if a < U256::from(Self::MODULUS) {
+        if a < U256::from([
+            0x43e1f593f0000001,
+            0x2833e84879b97091,
+            0xb85045b68181585d,
+            0x30644e72e131a029,
+        ]) {
             Some(Fr(a))
         } else {
             None
@@ -110,7 +108,13 @@ impl Fr {
     pub fn interpret(buf: &[u8; 64]) -> Self {
         Fr::new(
             U512::interpret(buf)
-                .divrem(&U256::from(Self::MODULUS)).1
+                .divrem(&U256::from([
+                    0x43e1f593f0000001,
+                    0x2833e84879b97091,
+                    0xb85045b68181585d,
+                    0x30644e72e131a029,
+                ]))
+                .1,
         )
         .unwrap()
     }
@@ -119,7 +123,12 @@ impl Fr {
     #[inline]
     #[allow(dead_code)]
     pub fn modulus() -> U256 {
-        U256::from(Self::MODULUS)
+        U256::from([
+            0x43e1f593f0000001,
+            0x2833e84879b97091,
+            0xb85045b68181585d,
+            0x30644e72e131a029,
+        ])
     }
 
     #[inline]
@@ -261,19 +270,19 @@ impl MulAssign for Fr {
     fn mul_assign(&mut self, other: Fr) {
         #[cfg(target_os = "zkvm")]
         {
-            let mut result: [u32; 8] = [0u32; 8];
-            let lhs = cast::<[u128; 2], [u32; 8]>(self.0 .0);
-            let rhs = cast::<[u128; 2], [u32; 8]>(other.0 .0);
-            let modulus = cast::<[u128; 2], [u32; 8]>(Fr::modulus().0);
+            let mut result: [u64; 4] = [0u64; 4];
+            let lhs = cast::<[u128; 2], [u64; 4]>(self.0 .0);
+            let rhs = cast::<[u128; 2], [u64; 4]>(other.0 .0);
+            let modulus = cast::<[u128; 2], [u64; 4]>(Fr::modulus().0);
             unsafe {
                 pico_patch_libs::sys_bigint(
-                    &mut result as *mut [u32; 8],
+                    &mut result as *mut [u64; 4],
                     0,
-                    &lhs as *const [u32; 8],
-                    &rhs as *const [u32; 8],
-                    &modulus as *const [u32; 8],
+                    &lhs as *const [u64; 4],
+                    &rhs as *const [u64; 4],
+                    &modulus as *const [u64; 4],
                 );
-                self.0 = U256::from(cast::<[u32; 8], [u64; 4]>(result));
+                self.0 = U256::from(cast::<[u64; 4], [u64; 4]>(result));
             }
         }
         #[cfg(not(target_os = "zkvm"))]
@@ -505,8 +514,8 @@ impl Fq {
     pub(crate) fn add_inp(&mut self, other: &Fq) {
         #[cfg(target_os = "zkvm")]
         {
-            let lhs = cast_mut::<Fq, [u32; 8]>(self);
-            let rhs = cast_ref::<Fq, [u32; 8]>(&other);
+            let lhs = cast_mut::<Fq, [u64; 4]>(self);
+            let rhs = cast_ref::<Fq, [u64; 4]>(&other);
             unsafe {
                 core::arch::asm!(
                 "ecall",
@@ -527,8 +536,8 @@ impl Fq {
     pub(crate) fn sub_inp(&mut self, other: &Fq) {
         #[cfg(target_os = "zkvm")]
         {
-            let lhs = cast_mut::<Fq, [u32; 8]>(self);
-            let rhs = cast_ref::<Fq, [u32; 8]>(&other);
+            let lhs = cast_mut::<Fq, [u64; 4]>(self);
+            let rhs = cast_ref::<Fq, [u64; 4]>(&other);
             unsafe {
                 core::arch::asm!(
                 "ecall",
@@ -549,8 +558,8 @@ impl Fq {
     pub(crate) fn mul_inp(&mut self, other: &Fq) {
         #[cfg(target_os = "zkvm")]
         {
-            let lhs = cast_mut::<Fq, [u32; 8]>(self);
-            let rhs = cast_ref::<Fq, [u32; 8]>(&other);
+            let lhs = cast_mut::<Fq, [u64; 4]>(self);
+            let rhs = cast_ref::<Fq, [u64; 4]>(&other);
             unsafe {
                 core::arch::asm!(
                 "ecall",
@@ -804,16 +813,15 @@ impl Fq {
 
                     assert!(root * root == has_root, "Invalid hint supplied for Fq sqrt");
 
-                    None
+                    return None;
                 }
-                1 => {
+                _ => {
                     let sqrt = Fq::new(U256(cast::<[u8; 32], [u128; 2]>(bytes))).unwrap();
 
                     assert!(sqrt * sqrt == *self, "Invalid hint supplied for Fq sqrt");
 
-                    Some(sqrt)
+                    return Some(sqrt);
                 }
-                _ => panic!("invalid choice byte read from unconstrained hint")
             }
         }
 

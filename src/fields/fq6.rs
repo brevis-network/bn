@@ -125,6 +125,90 @@ impl Fq6 {
             c2: self.c2.frobenius_map(power) * frobenius_coeffs_c2(power),
         }
     }
+
+    #[inline]
+    pub fn add_inp(&mut self, other: &Fq6) {
+        self.c0.add_inp(&other.c0);
+        self.c1.add_inp(&other.c1);
+        self.c2.add_inp(&other.c2);
+    }
+
+    #[inline]
+    pub fn sub_inp(&mut self, other: &Fq6) {
+        self.c0.sub_inp(&other.c0);
+        self.c1.sub_inp(&other.c1);
+        self.c2.sub_inp(&other.c2);
+    }
+
+    #[inline]
+    pub fn double_inp(&mut self) {
+        self.c0.double_inp();
+        self.c1.double_inp();
+        self.c2.double_inp();
+    }
+
+    #[inline]
+    pub fn neg_inp(&mut self) {
+        self.c0 = -self.c0;
+        self.c1 = -self.c1;
+        self.c2 = -self.c2;
+    }
+
+    #[inline]
+    pub fn mul_by_nonresidue_inp(&mut self) {
+        // Fq6 nonresidue multiplication: (c0, c1, c2) → (c2*ξ, c0, c1)
+        let tmp = self.c2;
+        self.c2 = self.c1;
+        self.c1 = self.c0;
+        self.c0 = tmp;
+        self.c0.mul_by_nonresidue_inp();
+    }
+
+    pub fn mul_inp(&mut self, other: &Fq6) {
+        let a0 = self.c0;
+        let a1 = self.c1;
+        let a2 = self.c2;
+
+        let mut a_a = a0;
+        a_a.mul_inp(&other.c0);
+        let mut b_b = a1;
+        b_b.mul_inp(&other.c1);
+        let mut c_c = a2;
+        c_c.mul_inp(&other.c2);
+
+        // c0 = ((a1+a2)*(b1+b2) - bb - cc)*ξ + aa
+        let mut temp = other.c1;
+        temp.add_inp(&other.c2);
+        self.c0 = a1;
+        self.c0.add_inp(&a2);
+        self.c0.mul_inp(&temp);
+        self.c0.sub_inp(&b_b);
+        self.c0.sub_inp(&c_c);
+        self.c0.mul_by_nonresidue_inp();
+        self.c0.add_inp(&a_a);
+
+        // c1 = (a0+a1)*(b0+b1) - aa - bb + cc*ξ
+        temp = other.c0;
+        temp.add_inp(&other.c1);
+        self.c1 = a0;
+        self.c1.add_inp(&a1);
+        self.c1.mul_inp(&temp);
+        self.c1.sub_inp(&a_a);
+        self.c1.sub_inp(&b_b);
+        let mut nr_cc = c_c;
+        nr_cc.mul_by_nonresidue_inp();
+        self.c1.add_inp(&nr_cc);
+
+        // c2 = (a0+a2)*(b0+b2) - aa + bb - cc
+        temp = other.c0;
+        temp.add_inp(&other.c2);
+        self.c2 = a0;
+        self.c2.add_inp(&a2);
+        self.c2.mul_inp(&temp);
+        self.c2.sub_inp(&a_a);
+        self.c2.add_inp(&b_b);
+        self.c2.sub_inp(&c_c);
+    }
 }
 
 impl FieldElement for Fq6 {

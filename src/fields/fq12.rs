@@ -361,23 +361,44 @@ impl FieldElement for Fq12 {
     }
 
     fn squared(&self) -> Self {
-        let ab = self.c0 * self.c1;
+        let mut ab = self.c0;
+        ab.mul_inp(&self.c1);
 
-        Fq12 {
-            c0: (self.c1.mul_by_nonresidue() + self.c0) * (self.c0 + self.c1)
-                - ab
-                - ab.mul_by_nonresidue(),
-            c1: ab + ab,
-        }
+        // c0' = (c1*β + c0) * (c0 + c1) - ab - ab*β
+        let mut t0 = self.c1;
+        t0.mul_by_nonresidue_inp();
+        t0.add_inp(&self.c0);
+        let mut t1 = self.c0;
+        t1.add_inp(&self.c1);
+        t0.mul_inp(&t1);
+        t0.sub_inp(&ab);
+        let mut ab_nr = ab;
+        ab_nr.mul_by_nonresidue_inp();
+        t0.sub_inp(&ab_nr);
+
+        // c1' = 2*ab
+        ab.double_inp();
+
+        Fq12 { c0: t0, c1: ab }
     }
 
     fn inverse(self) -> Option<Self> {
-        (self.c0.squared() - (self.c1.squared().mul_by_nonresidue()))
-            .inverse()
-            .map(|t| Fq12 {
-                c0: self.c0 * t,
-                c1: -(self.c1 * t),
-            })
+        let mut t = self.c1.squared();
+        t.mul_by_nonresidue_inp();
+        let mut discriminant = self.c0.squared();
+        discriminant.sub_inp(&t);
+
+        discriminant.inverse().map(|inv| {
+            let mut new_c0 = inv;
+            new_c0.mul_inp(&self.c0);
+            let mut new_c1 = inv;
+            new_c1.mul_inp(&self.c1);
+            new_c1.neg_inp();
+            Fq12 {
+                c0: new_c0,
+                c1: new_c1,
+            }
+        })
     }
 }
 
@@ -385,12 +406,28 @@ impl Mul for Fq12 {
     type Output = Fq12;
 
     fn mul(self, other: Fq12) -> Fq12 {
-        let aa = self.c0 * other.c0;
-        let bb = self.c1 * other.c1;
+        let mut aa = self.c0;
+        aa.mul_inp(&other.c0);
+        let mut bb = self.c1;
+        bb.mul_inp(&other.c1);
+
+        // c0' = bb*β + aa
+        let mut new_c0 = bb;
+        new_c0.mul_by_nonresidue_inp();
+        new_c0.add_inp(&aa);
+
+        // c1' = (c0+c1)*(o.c0+o.c1) - aa - bb
+        let mut sum_self = self.c0;
+        sum_self.add_inp(&self.c1);
+        let mut sum_other = other.c0;
+        sum_other.add_inp(&other.c1);
+        sum_self.mul_inp(&sum_other);
+        sum_self.sub_inp(&aa);
+        sum_self.sub_inp(&bb);
 
         Fq12 {
-            c0: bb.mul_by_nonresidue() + aa,
-            c1: (self.c0 + self.c1) * (other.c0 + other.c1) - aa - bb,
+            c0: new_c0,
+            c1: sum_self,
         }
     }
 }
@@ -407,10 +444,10 @@ impl Sub for Fq12 {
     type Output = Fq12;
 
     fn sub(self, other: Fq12) -> Fq12 {
-        Fq12 {
-            c0: self.c0 - other.c0,
-            c1: self.c1 - other.c1,
-        }
+        let mut result = self;
+        result.c0.sub_inp(&other.c0);
+        result.c1.sub_inp(&other.c1);
+        result
     }
 }
 
@@ -418,10 +455,10 @@ impl Add for Fq12 {
     type Output = Fq12;
 
     fn add(self, other: Fq12) -> Fq12 {
-        Fq12 {
-            c0: self.c0 + other.c0,
-            c1: self.c1 + other.c1,
-        }
+        let mut result = self;
+        result.c0.add_inp(&other.c0);
+        result.c1.add_inp(&other.c1);
+        result
     }
 }
 
@@ -429,9 +466,9 @@ impl Neg for Fq12 {
     type Output = Fq12;
 
     fn neg(self) -> Fq12 {
-        Fq12 {
-            c0: -self.c0,
-            c1: -self.c1,
-        }
+        let mut result = self;
+        result.c0.neg_inp();
+        result.c1.neg_inp();
+        result
     }
 }
